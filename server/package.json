@@ -1,0 +1,42 @@
+{
+  "name": "quantora-ai-server",
+  "version": "1.0.0",
+  "description": "Quantora AI backend service providing market data, AI predictions, and alerts.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "build": "node --check server.js"
+  },
+  "keywords": [
+    "quantora",
+    "crypto",
+    "ai",
+    "express"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "dependencies": {
+    "@clerk/nextjs": "^6.33.7",
+    "axios": "^1.12.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "helmet": "^8.1.0",
+    "mongoose": "^8.19.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.9",
+    "pino": "^10.1.0",
+    "pino-http": "^11.0.0",
+    "pino-pretty": "^13.1.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
