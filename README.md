@@ -180,6 +180,92 @@ curl http://localhost:5000/api/snapshot/bitcoin
 curl http://localhost:5000/api/predict/bitcoin
 ```
 
+## Render Deployment
+
+This repo includes `render.yaml` for a two-service Render Blueprint:
+
+- `quantora-ai-api`: Express API from `server/`
+- `quantora-ai-client`: Vite static frontend from `client/`
+
+### 1. Push Latest Code
+
+```bash
+git add render.yaml README.md
+git commit -m "Add Render deployment configuration"
+git push origin main
+```
+
+### 2. Create The Blueprint
+
+Open:
+
+```text
+https://dashboard.render.com/blueprint/new?repo=https://github.com/DebtanChowdhury1/QuantoraAI
+```
+
+Connect GitHub if Render asks, then apply the Blueprint.
+
+### 3. Backend Environment
+
+Fill these secret values for `quantora-ai-api` in Render:
+
+```env
+CLIENT_ORIGIN=https://your-render-client-url.onrender.com
+MONGO_URI=your_mongodb_atlas_connection_string
+GEMINI_API_KEY=your_google_ai_key
+GROQ_API_KEY=optional_groq_key
+SMTP_USER=your_gmail_address
+SMTP_PASS=your_gmail_app_password
+CLERK_FRONTEND_API=your_clerk_publishable_key
+CLERK_API_KEY=your_clerk_secret_key
+```
+
+### 4. Frontend Environment
+
+Fill these values for `quantora-ai-client` in Render:
+
+```env
+VITE_API_BASE_URL=https://your-render-api-url.onrender.com/api
+VITE_CLERK_PUBLISHABLE_KEY=your_clerk_publishable_key
+```
+
+After Render creates both services, copy the real service URLs back into:
+
+- API `CLIENT_ORIGIN`
+- Client `VITE_API_BASE_URL`
+
+Then redeploy both services.
+
+### 5. External App Settings
+
+Update Clerk allowed URLs:
+
+- Allowed origins: `https://your-render-client-url.onrender.com`
+- Redirect URLs: `https://your-render-client-url.onrender.com/*`
+
+Update MongoDB Atlas network access:
+
+- For quick Render testing, allow `0.0.0.0/0`
+- For stricter production, use private networking or provider-specific allowlisting
+
+### 6. Verify Production
+
+Check:
+
+```bash
+curl https://your-render-api-url.onrender.com/api/health
+curl https://your-render-api-url.onrender.com/api/markets
+```
+
+Then open the frontend URL and confirm:
+
+- Login works
+- Dashboard loads market data
+- Coin detail pages load at the top
+- Portfolio saves and persists after logout/login
+- Notification preferences save
+- Test email sends from the Notifications page
+
 ## Notes
 
 - Real secrets must stay out of Git.
