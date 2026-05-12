@@ -25,7 +25,7 @@ const readSettings = () => {
       marketMoveAlerts: true,
       portfolioAlerts: true,
       portfolioValueAlerts: true,
-      marketMoveThreshold: 5,
+      marketMoveThreshold: 0.1,
       ...JSON.parse(window.localStorage.getItem(SETTINGS_KEY) || '{}'),
     };
   } catch {
@@ -37,7 +37,7 @@ const readSettings = () => {
       marketMoveAlerts: true,
       portfolioAlerts: true,
       portfolioValueAlerts: true,
-      marketMoveThreshold: 5,
+      marketMoveThreshold: 0.1,
     };
   }
 };

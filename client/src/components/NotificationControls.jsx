@@ -22,7 +22,7 @@ const defaultEmailSettings = {
   portfolioEmail: true,
   portfolioValueEmail: true,
   emailFrequencyMinutes: 60,
-  marketMoveThreshold: 5,
+  marketMoveThreshold: 0.1,
   selectedCoins: [],
 };
 
@@ -74,7 +74,7 @@ const fallbackCoins = [
 
 const clampThreshold = (value) => {
   const numeric = Number(String(value).replace(/[^\d.]/g, ''));
-  if (!Number.isFinite(numeric)) return 5;
+  if (!Number.isFinite(numeric)) return 0.1;
   return Math.min(Math.max(Number(numeric.toFixed(1)), 0.1), 50);
 };
 

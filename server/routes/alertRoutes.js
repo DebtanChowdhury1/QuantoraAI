@@ -29,10 +29,10 @@ const ensureNotificationSettings = (user) => {
     portfolioEmail: current.portfolioEmail ?? true,
     portfolioValueEmail: current.portfolioValueEmail ?? true,
     emailFrequencyMinutes: current.emailFrequencyMinutes ?? config.emailMinGapMin,
-    marketMoveThreshold: current.marketMoveThreshold ?? 5,
+    marketMoveThreshold: current.marketMoveThreshold ?? 0.1,
     selectedCoins: Array.isArray(current.selectedCoins) && current.selectedCoins.length
       ? current.selectedCoins
-      : config.coins.slice(0, 10),
+      : config.coins,
   };
 };
 
@@ -137,7 +137,7 @@ router.put(
       ? payload.selectedCoins
           .map((coinId) => String(coinId).trim().toLowerCase())
           .filter((coinId) => config.coins.includes(coinId))
-      : user.notificationSettings?.selectedCoins || config.coins.slice(0, 10);
+      : user.notificationSettings?.selectedCoins || config.coins;
 
     user.notificationSettings = {
       ...user.notificationSettings,
@@ -151,7 +151,7 @@ router.put(
         : config.emailMinGapMin,
       marketMoveThreshold: Number.isFinite(Number(payload.marketMoveThreshold))
         ? Math.min(Math.max(Number(payload.marketMoveThreshold), 0.1), 50)
-        : 5,
+        : 0.1,
       selectedCoins,
     };
 
@@ -207,7 +207,7 @@ router.post(
         res.json({ data: { sent: false, reason: 'market-email-disabled' } });
         return;
       }
-      if (Number.isFinite(changePct) && Math.abs(changePct) < Number(settings.marketMoveThreshold || 5)) {
+      if (Number.isFinite(changePct) && Math.abs(changePct) < Number(settings.marketMoveThreshold || 0.1)) {
         res.json({ data: { sent: false, reason: 'below-threshold' } });
         return;
       }
