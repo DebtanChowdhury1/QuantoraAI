@@ -87,7 +87,13 @@ export const fetchBinanceTickerSnapshots = async (coinIds = []) => {
     return [];
   }
 
-  const { data } = await axios.get('https://api.binance.com/api/v3/ticker/24hr', { timeout: 8000 });
+  const symbols = requested.map((coinId) => BINANCE_SYMBOLS[coinId].pair);
+  const { data } = await axios.get('https://api.binance.com/api/v3/ticker/24hr', {
+    params: {
+      symbols: JSON.stringify(symbols),
+    },
+    timeout: 8000,
+  });
   const tickers = Array.isArray(data) ? data : [];
   const byPair = new Map(tickers.map((item) => [String(item.symbol || '').toUpperCase(), item]));
 
