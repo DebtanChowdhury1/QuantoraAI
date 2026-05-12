@@ -1,19 +1,41 @@
-import { useMemo } from 'react';
+import { useLayoutEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import Loader from '@/components/Loader';
 import ErrorState from '@/components/ErrorState';
 import PriceChart from '@/components/PriceChart';
 import AIInsight from '@/components/AIInsight';
 import PredictionHistoryList from '@/components/PredictionHistoryList';
+import ConfidenceChart from '@/components/ConfidenceChart';
 import AlertPreferencesPanel from '@/components/AlertPreferencesPanel';
+import ChatPanel from '@/components/ChatPanel';
 import usePrediction from '@/hooks/usePrediction';
 import useAlertPreferences from '@/hooks/useAlertPreferences';
+import { useCurrency } from '@/context/CurrencyContext';
+import { formatUsdAsCurrency } from '@/lib/formatters';
 import { SignedIn, SignedOut, SignInButton, useUser } from '@/lib/authClient';
 
 const CoinDetail = () => {
   const { id } = useParams();
   const { isSignedIn, user } = useUser();
+  const { currency, rate } = useCurrency();
+
+  useLayoutEffect(() => {
+    const resetScroll = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+
+    resetScroll();
+    const frame = window.requestAnimationFrame(resetScroll);
+    const timer = window.setTimeout(resetScroll, 120);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+    };
+  }, [id]);
+
   const identity = useMemo(() => {
     if (!isSignedIn || !user) return null;
     return {
@@ -46,7 +68,11 @@ const CoinDetail = () => {
       return {};
     }
     return rows.reduce((acc, pref) => {
-      acc[pref.coinId] = pref.enabled;
+      acc[pref.coinId] = {
+        enabled: pref.enabled,
+        minConfidence: pref.minConfidence ?? 0.65,
+        cooldownMinutes: pref.cooldownMinutes ?? 60,
+      };
       return acc;
     }, {});
   }, [preferencesQuery.data]);
@@ -81,8 +107,6 @@ const CoinDetail = () => {
     );
   }
 
-  const coinName = snapshot?.name || prediction?.coinId || id;
-  const chartData = !chartError && chart?.prices ? chart.prices : [];
   const currentPrice = (() => {
     if (typeof snapshot?.current_price === 'number') {
       return snapshot.current_price;
@@ -92,6 +116,23 @@ const CoinDetail = () => {
     }
     return null;
   })();
+  const coinName = snapshot?.name || prediction?.coinId || id;
+  const liveUpdatedAt = snapshot?.last_updated ? new Date(snapshot.last_updated) : null;
+  const liveUpdatedAtMs =
+    liveUpdatedAt && Number.isFinite(liveUpdatedAt.getTime()) ? liveUpdatedAt.getTime() : Date.now();
+  const chartData = (() => {
+    const base = !chartError && Array.isArray(chart?.prices) ? [...chart.prices] : [];
+    if (typeof currentPrice !== 'number') {
+      return base;
+    }
+    const last = base[base.length - 1];
+    if (!last || liveUpdatedAtMs - Number(last[0]) > 30 * 1000) {
+      base.push([liveUpdatedAtMs, currentPrice]);
+      return base;
+    }
+    base[base.length - 1] = [liveUpdatedAtMs, currentPrice];
+    return base;
+  })();
   const stats = prediction?.stats || {
     avgPrice: prediction?.averagePrice,
     volatility: prediction?.volatility,
@@ -100,10 +141,8 @@ const CoinDetail = () => {
 
   return (
     <div className="space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 shadow-glow"
+      <div
+        className="rounded-2xl border border-neutral-600/30 bg-neutral-900/70 p-6 shadow-glow backdrop-blur"
       >
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -112,7 +151,7 @@ const CoinDetail = () => {
               {snapshot?.symbol && <span> ({snapshot.symbol.toUpperCase()})</span>}
             </h1>
             <p className="text-sm text-neutral-400">
-              Live trend analysis powered by Google Gemini 2.0 Flash.
+              Live Quantora AI trend analysis with provider-aware fallback protection.
               {snapshotFallback && (
                 <span className="ml-2 text-xs uppercase tracking-wide text-gold">
                   Fallback snapshot via {snapshotSource}
@@ -124,35 +163,48 @@ const CoinDetail = () => {
                 </span>
               )}
             </p>
+            {liveUpdatedAt && (
+              <p className="mt-2 text-xs text-neutral-500">
+                Live snapshot updated{' '}
+                {new Intl.DateTimeFormat('en-US', {
+                  hour: 'numeric',
+                  minute: '2-digit',
+                  second: '2-digit',
+                }).format(liveUpdatedAt)}
+              </p>
+            )}
           </div>
           <div className="text-right">
-            <p className="text-sm text-neutral-400">Current Price</p>
+            <p className="text-sm text-neutral-400">
+              Current Price
+              {snapshotQuery.isFetching && (
+                <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-accent shadow-glow" />
+              )}
+            </p>
             <p className="text-2xl font-semibold text-accent">
               {currentPrice !== null
-                ? `$${currentPrice.toLocaleString(undefined, {
-                    minimumFractionDigits: currentPrice >= 1 ? 2 : 4,
-                    maximumFractionDigits: currentPrice >= 1 ? 2 : 6,
-                  })}`
+                ? formatUsdAsCurrency(currentPrice, { currency, rate })
                 : 'N/A'}
             </p>
+            <p className="mt-1 text-xs text-neutral-500">Live market sync</p>
           </div>
         </div>
-      </motion.div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 shadow-glow">
+        <div className="space-y-6 lg:col-span-2">
+          <div className="rounded-2xl border border-neutral-600/30 bg-neutral-900/70 p-6 shadow-glow backdrop-blur">
             <h2 className="text-lg font-semibold text-neutral-100">7 Day Price Action</h2>
             <p className="text-sm text-neutral-400">
               {chartError
                 ? 'Price history unavailable right now.'
                 : chartFallback
-                ? `Fallback history via ${chartSource} (cached).`
-                : 'CoinGecko spot pricing with 60s cached updates.'}
+                ? `Hourly history via ${chartSource}; live ticker appended.`
+                : 'Spot history with live ticker overlay.'}
             </p>
             <div className="mt-6">
               {chartError ? (
-                <div className="flex h-64 items-center justify-center rounded-2xl border border-neutral-600/40 text-sm text-neutral-400">
+                <div className="flex h-64 items-center justify-center rounded-2xl border border-neutral-600/40 bg-neutral-950/40 text-sm text-neutral-400">
                   Unable to render chart data.
                 </div>
               ) : (
@@ -160,6 +212,7 @@ const CoinDetail = () => {
               )}
             </div>
           </div>
+          <ConfidenceChart history={!historyError ? history || [] : []} />
         </div>
         <AIInsight prediction={prediction} stats={stats} meta={predictionMeta} />
       </div>
@@ -181,7 +234,7 @@ const CoinDetail = () => {
             {updating && <p className="text-xs text-neutral-400">Saving alert preferences...</p>}
           </SignedIn>
           <SignedOut>
-            <div className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 text-sm text-neutral-200">
+            <div className="rounded-2xl border border-neutral-600/30 bg-neutral-900/70 p-6 text-sm text-neutral-200 shadow-glow">
               <p>Sign in with Clerk to customize alert thresholds for {coinName}.</p>
               <SignInButton mode="modal">
                 <button
@@ -195,6 +248,13 @@ const CoinDetail = () => {
           </SignedOut>
         </div>
       </div>
+
+      <ChatPanel
+        scope="coin"
+        coinId={id}
+        title={`${coinName} Expert Chat`}
+        subtitle={`Ask Quantora about ${coinName} using live price, 7-day history, volatility, signals, and accuracy context.`}
+      />
     </div>
   );
 };

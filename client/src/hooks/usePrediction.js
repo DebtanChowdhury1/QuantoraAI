@@ -1,15 +1,24 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchPrediction, fetchPredictionHistory, fetchCoinHistory, fetchSnapshot } from '@/lib/api';
+import {
+  CHART_REFRESH_MS,
+  HISTORY_REFRESH_MS,
+  LIVE_PRICE_REFRESH_MS,
+  SIGNAL_REFRESH_MS,
+} from '@/lib/refreshIntervals';
 
 export const usePrediction = (coinId) => {
   const predictionQuery = useQuery({
     queryKey: ['prediction', coinId],
     queryFn: async () => {
-      const response = await fetchPrediction(coinId);
+      const response = await fetchPrediction(coinId, { force: true });
       return response;
     },
     enabled: Boolean(coinId),
-    refetchInterval: 10 * 60 * 1000,
+    refetchInterval: SIGNAL_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+    placeholderData: (previousData) => previousData,
   });
 
   const historyQuery = useQuery({
@@ -19,6 +28,10 @@ export const usePrediction = (coinId) => {
       return response;
     },
     enabled: Boolean(coinId),
+    refetchInterval: HISTORY_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+    placeholderData: (previousData) => previousData,
   });
 
   const chartQuery = useQuery({
@@ -28,6 +41,10 @@ export const usePrediction = (coinId) => {
       return response;
     },
     enabled: Boolean(coinId),
+    refetchInterval: CHART_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+    placeholderData: (previousData) => previousData,
   });
 
   const snapshotQuery = useQuery({
@@ -37,7 +54,10 @@ export const usePrediction = (coinId) => {
       return response;
     },
     enabled: Boolean(coinId),
-    staleTime: 5 * 60 * 1000,
+    refetchInterval: LIVE_PRICE_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+    placeholderData: (previousData) => previousData,
   });
 
   return {

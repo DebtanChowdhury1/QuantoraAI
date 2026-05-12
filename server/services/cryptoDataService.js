@@ -1,5 +1,6 @@
 import axios from 'axios';
 import Price from '../models/Price.js';
+import { config } from '../utils/limits.js';
 
 const fallbackNameFor = (coinId) => {
   if (!coinId) {
@@ -24,12 +25,97 @@ const fallbackSymbolFor = (coinId) => {
   return base.slice(0, 3);
 };
 
-const CACHE_TTL_MS = 15 * 60 * 1000;
+const CACHE_TTL_MS = Math.max(1, config.marketDataCacheSeconds) * 1000;
 const VOLATILITY_WINDOW_DAYS = 7;
 const HISTORY_POINTS = VOLATILITY_WINDOW_DAYS + 1;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const COINGECKO_MIN_DELAY_MS = 7000;
 const MAX_HISTORY_POINTS = VOLATILITY_WINDOW_DAYS * 24;
+export const BINANCE_SYMBOLS = {
+  bitcoin: { pair: 'BTCUSDT', symbol: 'BTC', name: 'Bitcoin' },
+  ethereum: { pair: 'ETHUSDT', symbol: 'ETH', name: 'Ethereum' },
+  binancecoin: { pair: 'BNBUSDT', symbol: 'BNB', name: 'BNB' },
+  solana: { pair: 'SOLUSDT', symbol: 'SOL', name: 'Solana' },
+  dogecoin: { pair: 'DOGEUSDT', symbol: 'DOGE', name: 'Dogecoin' },
+  cardano: { pair: 'ADAUSDT', symbol: 'ADA', name: 'Cardano' },
+  ripple: { pair: 'XRPUSDT', symbol: 'XRP', name: 'XRP' },
+  xrp: { pair: 'XRPUSDT', symbol: 'XRP', name: 'XRP' },
+  polkadot: { pair: 'DOTUSDT', symbol: 'DOT', name: 'Polkadot' },
+  chainlink: { pair: 'LINKUSDT', symbol: 'LINK', name: 'Chainlink' },
+  litecoin: { pair: 'LTCUSDT', symbol: 'LTC', name: 'Litecoin' },
+  tron: { pair: 'TRXUSDT', symbol: 'TRX', name: 'TRON' },
+  avalanche: { pair: 'AVAXUSDT', symbol: 'AVAX', name: 'Avalanche' },
+  'avalanche-2': { pair: 'AVAXUSDT', symbol: 'AVAX', name: 'Avalanche' },
+  'bitcoin-cash': { pair: 'BCHUSDT', symbol: 'BCH', name: 'Bitcoin Cash' },
+  stellar: { pair: 'XLMUSDT', symbol: 'XLM', name: 'Stellar' },
+  near: { pair: 'NEARUSDT', symbol: 'NEAR', name: 'NEAR Protocol' },
+  uniswap: { pair: 'UNIUSDT', symbol: 'UNI', name: 'Uniswap' },
+  aptos: { pair: 'APTUSDT', symbol: 'APT', name: 'Aptos' },
+  arbitrum: { pair: 'ARBUSDT', symbol: 'ARB', name: 'Arbitrum' },
+  optimism: { pair: 'OPUSDT', symbol: 'OP', name: 'Optimism' },
+  'shiba-inu': { pair: 'SHIBUSDT', symbol: 'SHIB', name: 'Shiba Inu' },
+  sui: { pair: 'SUIUSDT', symbol: 'SUI', name: 'Sui' },
+  hedera: { pair: 'HBARUSDT', symbol: 'HBAR', name: 'Hedera' },
+  'the-open-network': { pair: 'TONUSDT', symbol: 'TON', name: 'Toncoin' },
+  pepe: { pair: 'PEPEUSDT', symbol: 'PEPE', name: 'Pepe' },
+  'internet-computer': { pair: 'ICPUSDT', symbol: 'ICP', name: 'Internet Computer' },
+  filecoin: { pair: 'FILUSDT', symbol: 'FIL', name: 'Filecoin' },
+  'render-token': { pair: 'RENDERUSDT', symbol: 'RENDER', name: 'Render' },
+  cosmos: { pair: 'ATOMUSDT', symbol: 'ATOM', name: 'Cosmos' },
+  'injective-protocol': { pair: 'INJUSDT', symbol: 'INJ', name: 'Injective' },
+  aave: { pair: 'AAVEUSDT', symbol: 'AAVE', name: 'Aave' },
+  maker: { pair: 'MKRUSDT', symbol: 'MKR', name: 'Maker' },
+  'lido-dao': { pair: 'LDOUSDT', symbol: 'LDO', name: 'Lido DAO' },
+  'ethereum-classic': { pair: 'ETCUSDT', symbol: 'ETC', name: 'Ethereum Classic' },
+  vechain: { pair: 'VETUSDT', symbol: 'VET', name: 'VeChain' },
+  algorand: { pair: 'ALGOUSDT', symbol: 'ALGO', name: 'Algorand' },
+  'quant-network': { pair: 'QNTUSDT', symbol: 'QNT', name: 'Quant' },
+  'polygon-ecosystem-token': { pair: 'POLUSDT', symbol: 'POL', name: 'Polygon Ecosystem Token' },
+  'immutable-x': { pair: 'IMXUSDT', symbol: 'IMX', name: 'Immutable' },
+  'fetch-ai': { pair: 'FETUSDT', symbol: 'FET', name: 'Artificial Superintelligence Alliance' },
+  celestia: { pair: 'TIAUSDT', symbol: 'TIA', name: 'Celestia' },
+  'sei-network': { pair: 'SEIUSDT', symbol: 'SEI', name: 'Sei' },
+  bonk: { pair: 'BONKUSDT', symbol: 'BONK', name: 'Bonk' },
+  floki: { pair: 'FLOKIUSDT', symbol: 'FLOKI', name: 'FLOKI' },
+};
+
+export const fetchBinanceTickerSnapshots = async (coinIds = []) => {
+  const requested = coinIds
+    .map((coinId) => String(coinId || '').trim().toLowerCase())
+    .filter((coinId) => BINANCE_SYMBOLS[coinId]);
+  if (!requested.length) {
+    return [];
+  }
+
+  const { data } = await axios.get('https://api.binance.com/api/v3/ticker/24hr', { timeout: 8000 });
+  const tickers = Array.isArray(data) ? data : [];
+  const byPair = new Map(tickers.map((item) => [String(item.symbol || '').toUpperCase(), item]));
+
+  return requested
+    .map((coinId) => {
+      const mapping = BINANCE_SYMBOLS[coinId];
+      const ticker = byPair.get(mapping.pair);
+      const price = parseNumber(ticker?.lastPrice);
+      if (!Number.isFinite(price)) {
+        return null;
+      }
+      return {
+        id: coinId,
+        symbol: mapping.symbol,
+        name: mapping.name,
+        image: null,
+        current_price: formatPrice(price),
+        price_change_percentage_24h: roundTo(ticker?.priceChangePercent, 3),
+        volatility_7d: null,
+        market_cap: null,
+        total_volume: parseNumber(ticker?.quoteVolume),
+        last_updated: new Date().toISOString(),
+        source: 'Binance live ticker',
+        cached: false,
+      };
+    })
+    .filter(Boolean);
+};
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -98,6 +184,72 @@ const computeVolatility = (prices = []) => {
 
   const volatility = stdDev * Math.sqrt(Math.min(logReturns.length, VOLATILITY_WINDOW_DAYS));
   return Number.isFinite(volatility) ? Number((volatility * 100).toFixed(2)) : null;
+};
+
+const fetchBinanceHistory = async (coinId, pair) => {
+  try {
+    const url = new URL('https://api.binance.com/api/v3/klines');
+    url.searchParams.set('symbol', pair);
+    url.searchParams.set('interval', '1h');
+    url.searchParams.set('limit', MAX_HISTORY_POINTS.toString());
+
+    const { data } = await axios.get(url.toString(), { timeout: 10000 });
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data
+      .map((entry) => {
+        const timestamp = parseNumber(entry?.[0]);
+        const close = parseNumber(entry?.[4]);
+        if (!Number.isFinite(timestamp) || !Number.isFinite(close)) {
+          return null;
+        }
+        return [timestamp, close];
+      })
+      .filter(Boolean);
+  } catch (error) {
+    console.warn(
+      `[Binance] history fetch failed for ${coinId}: ${error?.message || 'Unknown error'}`
+    );
+    return [];
+  }
+};
+
+const fetchFromBinance = async (coinId) => {
+  const mapping = BINANCE_SYMBOLS[coinId];
+  if (!mapping) {
+    throw new Error(`No Binance USDT pair configured for ${coinId}`);
+  }
+
+  const url = new URL('https://api.binance.com/api/v3/ticker/24hr');
+  url.searchParams.set('symbol', mapping.pair);
+  const { data } = await axios.get(url.toString(), { timeout: 10000 });
+
+  const price = parseNumber(data?.lastPrice);
+  if (!Number.isFinite(price)) {
+    throw new Error('Binance price data unavailable');
+  }
+
+  const change24h = parseNumber(data?.priceChangePercent);
+  const volume24h = parseNumber(data?.quoteVolume);
+  const history = await fetchBinanceHistory(coinId, mapping.pair);
+  const volatility = computeVolatility(history.map(([, historyPrice]) => historyPrice));
+
+  console.log(`[Binance] success ${coinId}`);
+
+  return {
+    price,
+    change24h,
+    marketCap: null,
+    volume24h,
+    name: mapping.name,
+    symbol: mapping.symbol,
+    image: null,
+    volatility,
+    history,
+    lastUpdated: new Date().toISOString(),
+    source: 'Binance',
+  };
 };
 
 let coinGeckoQueue = Promise.resolve();
@@ -464,6 +616,7 @@ export const getCryptoData = async (coinId) => {
   }
 
   const providers = [
+    { name: 'Binance', handler: fetchFromBinance },
     { name: 'CoinPaprika', handler: fetchFromCoinPaprika },
     { name: 'CoinCap', handler: fetchFromCoinCap },
     { name: 'CoinGecko', handler: fetchFromCoinGecko },

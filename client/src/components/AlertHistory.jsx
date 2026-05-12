@@ -1,5 +1,6 @@
-import { motion } from 'framer-motion';
 import clsx from 'clsx';
+import { useCurrency } from '@/context/CurrencyContext';
+import { formatConfidencePercent, formatUsdAsCurrency } from '@/lib/formatters';
 
 const actionDot = {
   BUY: 'bg-accent shadow-[0_0_10px_rgba(0,255,136,0.7)]',
@@ -7,18 +8,18 @@ const actionDot = {
   SELL: 'bg-red-500 shadow-[0_0_10px_rgba(248,113,113,0.7)]',
 };
 
-const AlertHistory = ({ alerts = [] }) => (
+const AlertHistory = ({ alerts = [] }) => {
+  const { currency, rate } = useCurrency();
+
+  return (
   <div className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 shadow-glow">
     <h2 className="text-lg font-semibold text-neutral-100">Recent Alerts</h2>
     <p className="text-sm text-neutral-400">Quantora AI notifications across all portfolios</p>
     <div className="mt-6 space-y-4">
       {alerts.slice(0, 20).map((alert, index) => (
-        <motion.div
+        <div
           key={alert._id || `${alert.coinId}-${index}`}
           className="flex items-center gap-4 rounded-2xl border border-neutral-600/30 bg-neutral-600/10 px-4 py-3"
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: index * 0.02 }}
         >
           <span
             className={clsx(
@@ -30,7 +31,7 @@ const AlertHistory = ({ alerts = [] }) => (
             <p className="text-sm font-semibold text-neutral-100">
               {alert.action} {alert.coinId.toUpperCase()} @{' '}
               <span className="text-neutral-300">
-                ${alert.marketPrice?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                {formatUsdAsCurrency(alert.marketPrice, { currency, rate })}
               </span>
             </p>
             <p className="text-xs text-neutral-400">{alert.reason}</p>
@@ -45,16 +46,17 @@ const AlertHistory = ({ alerts = [] }) => (
               })}
             </p>
             <p className="text-neutral-500">
-              Confidence {(alert.confidence * 100).toFixed(1)}%
+              Confidence {formatConfidencePercent(alert.confidence)}
             </p>
           </div>
-        </motion.div>
+        </div>
       ))}
       {!alerts.length && (
-        <p className="text-sm text-neutral-400">No alerts dispatched yet — stay tuned.</p>
+        <p className="text-sm text-neutral-400">No alerts dispatched yet. New signal alerts will appear here.</p>
       )}
     </div>
   </div>
-);
+  );
+};
 
 export default AlertHistory;

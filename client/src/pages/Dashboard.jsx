@@ -1,53 +1,100 @@
-import { useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import CoinTable from '@/components/CoinTable';
 import Loader from '@/components/Loader';
 import ErrorState from '@/components/ErrorState';
 import StatCards from '@/components/StatCards';
 import AccuracyCard from '@/components/AccuracyCard';
+import MarketControls from '@/components/MarketControls';
+import MarketMovers from '@/components/MarketMovers';
+import CurrencyRatesStrip from '@/components/CurrencyRatesStrip';
 import useMarkets from '@/hooks/useMarkets';
-import useAlertPreferences from '@/hooks/useAlertPreferences';
-import { useUser, SignedIn, SignedOut, SignInButton } from '@/lib/authClient';
+import { searchCoins } from '@/lib/api';
+import { SignedOut, SignInButton } from '@/lib/authClient';
 
 const Dashboard = () => {
-  const { markets, isLoading, isError, marketsQuery, predictionsQuery, predictionError } = useMarkets();
+  const navigate = useNavigate();
+  const [query, setQuery] = useState('');
+  const [actionFilter, setActionFilter] = useState('ALL');
+  const [riskFilter, setRiskFilter] = useState('ALL');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const {
+    markets,
+    marketMeta,
+    fallbackUsed,
+    isLoading,
+    isError,
+    marketsQuery,
+    predictionsQuery,
+    predictionError,
+  } = useMarkets();
   const errorMessage = marketsQuery.error?.message || "Unable to load markets. Please retry.";
-  const { isSignedIn, user } = useUser();
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return undefined;
+    }
 
-  const identity = useMemo(() => {
-    if (!isSignedIn || !user) return null;
-    return {
-      clerkId: user.id,
-      email: user.primaryEmailAddress?.emailAddress,
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setSearching(true);
+      try {
+        const response = await searchCoins(trimmed);
+        if (!cancelled) {
+          setSearchResults(response.data?.coins || response.data || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setSearchResults([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setSearching(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [isSignedIn, user]);
+  }, [query]);
 
-  const { preferencesQuery, updatePreferences, updating } = useAlertPreferences(identity || {});
+  const filteredMarkets = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return markets.filter((coin) => {
+      const matchesQuery =
+        !normalizedQuery ||
+        coin.name?.toLowerCase().includes(normalizedQuery) ||
+        coin.symbol?.toLowerCase().includes(normalizedQuery) ||
+        coin.id?.toLowerCase().includes(normalizedQuery);
+      const matchesAction = actionFilter === 'ALL' || coin.aiAction === actionFilter;
+      const matchesRisk = riskFilter === 'ALL' || coin.aiRiskLevel === riskFilter;
+      return matchesQuery && matchesAction && matchesRisk;
+    });
+  }, [markets, query, actionFilter, riskFilter]);
 
-  const preferences = useMemo(() => {
-    const rows = preferencesQuery.data?.data;
-    if (!rows) {
-      return {};
-    }
-    return rows.reduce((acc, pref) => {
-      acc[pref.coinId] = pref.enabled;
-      return acc;
-    }, {});
-  }, [preferencesQuery.data]);
+  const handleSelectCoin = (coinId) => {
+    if (!coinId) return;
+    setSearchResults([]);
+    navigate(`/coin/${coinId}`);
+  };
 
-  const handleToggleAlert = async (coinId, enabled) => {
-    if (!identity) {
-      return;
-    }
-    const next = { ...preferences, [coinId]: enabled };
-    await updatePreferences(next);
+  const handleResetFilters = () => {
+    setQuery('');
+    setActionFilter('ALL');
+    setRiskFilter('ALL');
+    setSearchResults([]);
   };
 
   if (isLoading) {
     return <Loader label="Loading market data" />;
   }
 
-  if (isError) {
+  if (isError && !markets.length) {
     return (
       <ErrorState
         message={errorMessage}
@@ -61,18 +108,20 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-8">
-      <motion.section
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
-        className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 shadow-glow"
+      <section
+        className="rounded-2xl border border-neutral-600/30 bg-neutral-900/70 p-6 shadow-glow backdrop-blur"
       >
         <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h1 className="text-3xl font-semibold text-neutral-100">Market Dashboard</h1>
             <p className="text-sm text-neutral-400">
-              Real-time CoinGecko pricing blended with Quantora AI signals.
+              Real-time market data blended with structured Quantora AI signals.
             </p>
+            {fallbackUsed && (
+              <p className="mt-2 text-xs font-semibold uppercase tracking-wide text-gold">
+                Provider fallback active. Cached and secondary market feeds are protecting uptime.
+              </p>
+            )}
           </div>
           <SignedOut>
             <SignInButton mode="modal">
@@ -85,10 +134,24 @@ const Dashboard = () => {
             </SignInButton>
           </SignedOut>
         </div>
-      </motion.section>
+      </section>
 
-      <StatCards markets={markets} />
+      <StatCards markets={markets} meta={marketMeta} />
+      <CurrencyRatesStrip />
+      <MarketMovers markets={markets} />
       <AccuracyCard predictions={predictionsQuery.data?.data || []} />
+
+      <MarketControls
+        query={query}
+        onQueryChange={setQuery}
+        actionFilter={actionFilter}
+        onActionFilterChange={setActionFilter}
+        riskFilter={riskFilter}
+        onRiskFilterChange={setRiskFilter}
+        searchResults={searchResults}
+        searching={searching}
+        onSelectCoin={handleSelectCoin}
+      />
 
       
       {predictionError && (
@@ -96,14 +159,10 @@ const Dashboard = () => {
       )}
 
       <CoinTable
-        markets={markets}
-        alertPreferences={preferences}
-        onToggleAlert={identity ? handleToggleAlert : undefined}
+        markets={filteredMarkets}
+        totalMarkets={markets.length}
+        onResetFilters={handleResetFilters}
       />
-
-      <SignedIn>
-        {updating && <p className="text-xs text-neutral-400">Saving preferences...</p>}
-      </SignedIn>
     </div>
   );
 };

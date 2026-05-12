@@ -1,4 +1,6 @@
 import clsx from 'clsx';
+import { useCurrency } from '@/context/CurrencyContext';
+import { formatConfidencePercent, formatUsdAsCurrency } from '@/lib/formatters';
 
 const actionText = {
   BUY: 'text-accent',
@@ -6,7 +8,7 @@ const actionText = {
   SELL: 'text-red-400',
 };
 
-const computeAccuracy = (history = []) => {
+const computeSignalAlignment = (history = []) => {
   const windowSize = Math.min(history.length, 20);
   const window = history.slice(0, windowSize);
   let correct = 0;
@@ -38,12 +40,15 @@ const computeAccuracy = (history = []) => {
 };
 
 const PredictionHistoryList = ({ history = [], errorMessage }) => {
-  const { score, samples, windowSize } = computeAccuracy(history);
+  const { currency, rate } = useCurrency();
+  const { score, samples, windowSize } = computeSignalAlignment(history);
 
   return (
-    <div className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 shadow-glow">
+    <div className="rounded-2xl border border-neutral-600/30 bg-neutral-900/70 p-6 shadow-glow backdrop-blur">
       <h3 className="text-lg font-semibold text-neutral-100">Signal History</h3>
-      <p className="text-sm text-neutral-400">Past Quantora AI signals for this coin</p>
+      <p className="text-sm text-neutral-400">
+        Historical Quantora AI signals generated for this coin
+      </p>
 
       {errorMessage && (
         <p className="mt-3 rounded-2xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-xs text-red-200">
@@ -51,17 +56,17 @@ const PredictionHistoryList = ({ history = [], errorMessage }) => {
         </p>
       )}
 
-      <div className="mt-5 flex items-center justify-between rounded-2xl border border-neutral-600/30 bg-neutral-600/10 px-4 py-3 text-sm">
+      <div className="mt-5 flex items-center justify-between rounded-2xl border border-neutral-600/30 bg-neutral-950/40 px-4 py-3 text-sm">
         <div>
           <p className="text-xs uppercase tracking-wide text-neutral-400">
-            Accuracy (last {windowSize} signals)
+            Signal alignment (last {windowSize} signals)
           </p>
           <p className="mt-1 text-2xl font-semibold text-accent">
             {samples ? `${score}%` : 'N/A'}
           </p>
         </div>
         <p className="text-xs text-neutral-500">
-          Calculated vs price change 24h after each signal
+          Measures whether each signal matched the market state at generation time.
         </p>
       </div>
 
@@ -69,13 +74,26 @@ const PredictionHistoryList = ({ history = [], errorMessage }) => {
         {history.slice(0, 12).map((item) => (
           <div
             key={item._id}
-            className="flex items-center justify-between rounded-2xl border border-neutral-600/30 bg-neutral-600/10 px-4 py-3 text-sm"
+            className="flex items-center justify-between gap-4 rounded-2xl border border-neutral-600/30 bg-neutral-950/40 px-4 py-3 text-sm"
           >
             <div>
-              <p className={clsx('font-semibold', actionText[item.action] || 'text-neutral-100')}>
-                {item.action}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className={clsx('font-semibold', actionText[item.action] || 'text-neutral-100')}>
+                  {item.action}
+                </p>
+                <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
+                  {item.trendDirection || 'SIDEWAYS'}
+                </span>
+                <span className="rounded-full border border-neutral-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-neutral-400">
+                  {item.riskLevel || 'MEDIUM'} risk
+                </span>
+              </div>
               <p className="text-xs text-neutral-400">{item.reason}</p>
+              <p className="mt-2 text-xs text-neutral-500">
+                Price {formatUsdAsCurrency(item.marketPrice || 0, { currency, rate })}{' '}
+                | 24h {Number(item.change24h || 0).toFixed(2)}% | Volatility{' '}
+                {Number(item.volatility || 0).toFixed(2)}%
+              </p>
             </div>
             <div className="text-right text-xs text-neutral-400">
               <p>
@@ -87,7 +105,7 @@ const PredictionHistoryList = ({ history = [], errorMessage }) => {
                 })}
               </p>
               <p className="text-neutral-500">
-                Confidence {(item.confidence * 100).toFixed(1)}%
+                Confidence {formatConfidencePercent(item.confidence)}
               </p>
             </div>
           </div>

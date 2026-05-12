@@ -7,6 +7,9 @@ import logger from './utils/logger.js';
 import marketRoutes from './routes/marketRoutes.js';
 import aiRoutes from './routes/aiRoutes.js';
 import alertRoutes from './routes/alertRoutes.js';
+import chatRoutes from './routes/chatRoutes.js';
+import investmentRoutes from './routes/investmentRoutes.js';
+import fxRoutes from './routes/fxRoutes.js';
 import { HttpError } from './utils/httpError.js';
 
 const app = express();
@@ -25,7 +28,7 @@ app.use(cors(corsOptions));
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
-    max: 30,
+    max: 1200,
     standardHeaders: true,
     legacyHeaders: false,
   })
@@ -53,6 +56,9 @@ app.get('/api/health', (req, res) => {
 app.use('/api', marketRoutes);
 app.use('/api/predict', aiRoutes);
 app.use('/api/alerts', alertRoutes);
+app.use('/api/chat', chatRoutes);
+app.use('/api/investments', investmentRoutes);
+app.use('/api/fx', fxRoutes);
 
 app.use((req, _res, next) => {
   next(new HttpError(404, 'Route not found'));

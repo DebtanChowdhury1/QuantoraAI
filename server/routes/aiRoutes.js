@@ -12,11 +12,24 @@ const router = express.Router();
 
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
+  asyncHandler(async (req, res) => {
     const limit = Number(config.coins.length) * 5 || 20;
+    const refresh = req.query.refresh !== 'false';
+    const notify = req.query.notify !== 'false';
+    if (refresh) {
+      await Promise.allSettled(
+        config.coins.map((coinId) =>
+          generateAndStorePrediction(coinId, { notify })
+        )
+      );
+    }
     const predictions = await getLatestPredictions(limit);
     res.json({
       data: predictions,
+      meta: {
+        refreshed: refresh,
+        signalCacheSeconds: config.aiSignalCacheSeconds,
+      },
     });
   })
 );
@@ -26,7 +39,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const coinId = req.params.id;
     const force = req.query.force === 'true';
-    const maxAgeMs = config.predictRefreshMin * 60 * 1000;
+    const maxAgeMs = config.aiSignalCacheSeconds * 1000;
 
     let latest = await getLatestPredictionForCoin(coinId);
     const isStale = !latest || Date.now() - latest.createdAt.getTime() > maxAgeMs;
@@ -37,7 +50,7 @@ router.get(
     let fallbackUsed = false;
 
     if (force || isStale || !latest) {
-      const result = await generateAndStorePrediction(coinId, { notify: false });
+      const result = await generateAndStorePrediction(coinId, { notify: false, force });
       latest = result.predictionDoc;
       stats = result.stats;
       reused = !!result.reused;
@@ -49,16 +62,17 @@ router.get(
         change24h: latest.change24h,
       };
       reused = true;
-      fallbackUsed = Boolean(latest.geminiResponse?.fallback);
+      fallbackUsed = Boolean((latest.providerResponse || latest.geminiResponse)?.fallback);
     }
 
+    const providerPayload = latest.providerResponse || latest.geminiResponse || {};
     const sourceType = reused
-      ? latest.geminiResponse?.fallback
+      ? providerPayload?.fallback
         ? 'heuristic'
         : 'cache'
       : fallbackUsed
       ? 'heuristic'
-      : 'gemini';
+      : providerPayload?.provider || 'quantora-ai';
 
     res.json({
       data: {
@@ -66,6 +80,13 @@ router.get(
         action: latest.action,
         confidence: latest.confidence,
         reason: latest.reason,
+        reasoning: latest.reason,
+        riskLevel: latest.riskLevel,
+        trendDirection: latest.trendDirection,
+        predictionHorizon: latest.predictionHorizon,
+        momentum: latest.momentum,
+        marketStrength: latest.marketStrength,
+        providerStatus: latest.providerStatus,
         createdAt: latest.createdAt,
         marketPrice: latest.marketPrice,
         change24h: latest.change24h,
@@ -99,7 +120,7 @@ router.post(
   '/:id/refresh',
   asyncHandler(async (req, res) => {
     const coinId = req.params.id;
-    const result = await generateAndStorePrediction(coinId, { notify: false });
+    const result = await generateAndStorePrediction(coinId, { notify: false, force: true });
     const { predictionDoc, stats, fallbackUsed } = result;
     res.status(201).json({
       data: {
@@ -107,6 +128,13 @@ router.post(
         action: predictionDoc.action,
         confidence: predictionDoc.confidence,
         reason: predictionDoc.reason,
+        reasoning: predictionDoc.reason,
+        riskLevel: predictionDoc.riskLevel,
+        trendDirection: predictionDoc.trendDirection,
+        predictionHorizon: predictionDoc.predictionHorizon,
+        momentum: predictionDoc.momentum,
+        marketStrength: predictionDoc.marketStrength,
+        providerStatus: predictionDoc.providerStatus,
         createdAt: predictionDoc.createdAt,
         marketPrice: predictionDoc.marketPrice,
         change24h: predictionDoc.change24h,
@@ -120,7 +148,9 @@ router.post(
       meta: {
         refreshed: true,
         fallbackUsed,
-        sourceType: fallbackUsed ? 'heuristic' : 'gemini',
+        sourceType: fallbackUsed
+          ? 'heuristic'
+          : predictionDoc.providerResponse?.provider || 'quantora-ai',
       },
     });
   })

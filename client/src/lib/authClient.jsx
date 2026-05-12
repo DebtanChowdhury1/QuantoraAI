@@ -3,6 +3,7 @@ import {
   SignedIn as RealSignedIn,
   SignedOut as RealSignedOut,
   SignInButton as RealSignInButton,
+  SignOutButton as RealSignOutButton,
   UserButton as RealUserButton,
   UserProfile as RealUserProfile,
   useUser as realUseUser,
@@ -41,6 +42,13 @@ export const SignInButton = (props) => {
     return props.children || null;
   }
   return <RealSignInButton {...props} />;
+};
+
+export const SignOutButton = (props) => {
+  if (!isAuthEnabled) {
+    return props.children || null;
+  }
+  return <RealSignOutButton {...props} />;
 };
 
 export const UserButton = (props) => {

@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import InMemoryCache from '../utils/cache.js';
 import { config, minutesToMs } from '../utils/limits.js';
 
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env.local', quiet: true });
 
 const cache = new InMemoryCache();
 
@@ -61,7 +61,7 @@ const fetchFromCoinGecko = async (path, { params, errorMessage, cacheKey, ttlMs,
     }
     console.log(`[CoinGecko] GET ${url} (attempt ${attempt + 1}/${attempts + 1})`);
     try {
-      const { data } = await axios.get(url);
+      const { data } = await axios.get(url, { timeout: 8000 });
       cache.set(resolvedCacheKey, data, ttlMs);
       lastRequestTime = Date.now();
       return data;
@@ -107,13 +107,13 @@ export const getMarketData = async () =>
     params: {
       vs_currency: 'usd',
       order: 'market_cap_desc',
-      per_page: 100,
+      per_page: 250,
       page: 1,
       sparkline: false,
     },
     errorMessage: 'Failed to fetch market data',
-    cacheKey: 'coins/markets:usd',
-    ttlMs: minutesToMs(config.marketsRefreshMin),
+    cacheKey: 'coins/markets:usd:250',
+    ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
 export const getSimplePrice = async (ids = [], currencies = []) =>
@@ -124,14 +124,14 @@ export const getSimplePrice = async (ids = [], currencies = []) =>
     },
     errorMessage: 'Failed to fetch simple price data',
     cacheKey: `simple/price:${Array.isArray(ids) ? ids.join(',') : ids}:${Array.isArray(currencies) ? currencies.join(',') : currencies}`,
-    ttlMs: minutesToMs(1),
+    ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
 export const getCoinDetails = async (id) =>
   fetchFromCoinGecko(`coins/${encodeURIComponent(id)}`, {
     errorMessage: `Failed to fetch coin details for ${id}`,
     cacheKey: `coin:${id}:details`,
-    ttlMs: minutesToMs(5),
+    ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
 export const getMarketChart = async (id, days = 30) =>
@@ -142,7 +142,7 @@ export const getMarketChart = async (id, days = 30) =>
     },
     errorMessage: `Failed to fetch market chart for ${id}`,
     cacheKey: `coin:${id}:chart:${days}`,
-    ttlMs: minutesToMs(15),
+    ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
 export const getHistoricalData = async (id, date) =>
@@ -163,14 +163,14 @@ export const getOHLC = async (id, days = 7) =>
     },
     errorMessage: `Failed to fetch OHLC data for ${id}`,
     cacheKey: `coin:${id}:ohlc:${days}`,
-    ttlMs: minutesToMs(15),
+    ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
 export const getGlobalStats = async () =>
   fetchFromCoinGecko('global', {
     errorMessage: 'Failed to fetch global stats',
     cacheKey: 'global:stats',
-    ttlMs: minutesToMs(5),
+    ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
 export const getDefiStats = async () =>

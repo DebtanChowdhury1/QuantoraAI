@@ -19,17 +19,19 @@ const computeAccuracy = (predictions = []) => {
 const AccuracyCard = ({ predictions = [] }) => {
   const { score, samples } = computeAccuracy(predictions);
   return (
-    <div className="rounded-3xl border border-neutral-600/30 bg-neutral-600/10 p-6 shadow-glow">
-      <p className="text-xs uppercase tracking-[0.3em] text-neutral-400">Weekly Accuracy</p>
+    <div className="rounded-2xl border border-neutral-600/30 bg-neutral-900/70 p-6 shadow-glow backdrop-blur">
+      <p className="text-xs uppercase tracking-[0.3em] text-neutral-400">Signal Alignment</p>
       <div className="mt-4 flex items-end justify-between">
         <div>
           <p className="text-4xl font-bold text-accent">{score}%</p>
-          <p className="text-sm text-neutral-400">Based on {samples} latest signals</p>
+          <p className="text-sm text-neutral-400">
+            {samples ? `${samples} recent signals matched against 24h movement` : 'Waiting for enough signals'}
+          </p>
         </div>
         <div className="text-right text-sm text-neutral-300">
-          <p>Goal: 65%</p>
+          <p>Benchmark: 65%</p>
           <p className="text-xs text-neutral-500">
-            Calculated via historical signal vs 24h trend alignment
+            BUY counts correct when price moved up, SELL when price moved down, HOLD when price stayed range-bound.
           </p>
         </div>
       </div>

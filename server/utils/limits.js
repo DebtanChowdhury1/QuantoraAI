@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env', override: true, quiet: true });
+dotenv.config({ path: '.env.local', override: true, quiet: true });
 
 const dayInMs = 24 * 60 * 60 * 1000;
 
@@ -21,12 +22,59 @@ const parseBoolean = (value, fallback) => {
   return fallback;
 };
 
-const defaultCoins = ['bitcoin', 'ethereum', 'solana', 'dogecoin', 'cardano'];
+const defaultCoins = [
+  'bitcoin',
+  'ethereum',
+  'binancecoin',
+  'solana',
+  'ripple',
+  'dogecoin',
+  'cardano',
+  'tron',
+  'avalanche-2',
+  'chainlink',
+  'polkadot',
+  'litecoin',
+  'bitcoin-cash',
+  'stellar',
+  'near',
+  'uniswap',
+  'aptos',
+  'arbitrum',
+  'optimism',
+  'shiba-inu',
+  'sui',
+  'hedera',
+  'the-open-network',
+  'pepe',
+  'internet-computer',
+  'filecoin',
+  'render-token',
+  'cosmos',
+  'injective-protocol',
+  'aave',
+  'maker',
+  'lido-dao',
+  'ethereum-classic',
+  'vechain',
+  'algorand',
+  'quant-network',
+  'polygon-ecosystem-token',
+  'immutable-x',
+  'fetch-ai',
+  'celestia',
+  'sei-network',
+  'bonk',
+  'floki',
+];
 
 export const config = {
   coins: process.env.COINS ? process.env.COINS.split(',').map((c) => c.trim()).filter(Boolean) : defaultCoins,
-  marketsRefreshMin: parseNumber(process.env.MARKETS_REFRESH_MIN, 5),
+  useCoinGeckoPrimary: parseBoolean(process.env.USE_COINGECKO_PRIMARY, true),
+  marketsRefreshMin: parseNumber(process.env.MARKETS_REFRESH_MIN, 1),
+  enablePredictionCron: parseBoolean(process.env.ENABLE_PREDICTION_CRON, true),
   predictRefreshMin: parseNumber(process.env.PREDICT_REFRESH_MIN, 10),
+  aiSignalCacheSeconds: parseNumber(process.env.AI_SIGNAL_CACHE_SECONDS, 2),
   predictCoinsPerCycle: parseNumber(process.env.PREDICT_COINS_PER_CYCLE, 5),
   maxGeminiPerDay: parseNumber(process.env.MAX_GEMINI_REQ_PER_DAY, 800),
   maxCoinGeckoPerDay: parseNumber(process.env.MAX_COINGECKO_REQ_PER_DAY, 250),
@@ -39,6 +87,7 @@ export const config = {
   coingeckoRequestDelayMs: parseNumber(process.env.COINGECKO_REQUEST_DELAY_MS, 1500),
   coingeckoRetryAttempts: parseNumber(process.env.COINGECKO_RETRY_ATTEMPTS, 2),
   coingeckoRetryDelayMs: parseNumber(process.env.COINGECKO_RETRY_DELAY_MS, 10000),
+  marketDataCacheSeconds: parseNumber(process.env.MARKET_DATA_CACHE_SECONDS, 2),
 };
 
 const counters = {

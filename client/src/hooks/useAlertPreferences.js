@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchAlertPreferences, fetchAlertHistory, updateAlertPreferences } from '@/lib/api';
+import { ALERT_REFRESH_MS } from '@/lib/refreshIntervals';
 
 export const useAlertPreferences = (identity) => {
   const queryClient = useQueryClient();
@@ -10,19 +11,25 @@ export const useAlertPreferences = (identity) => {
     queryFn: async () => {
       const response = await fetchAlertPreferences(identity);
       return {
-        data: response.data?.data || [],
-        meta: response.data?.meta || {},
+        data: response.data || [],
+        meta: response.meta || {},
       };
     },
     enabled,
+    refetchInterval: ALERT_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
   });
 
   const historyQuery = useQuery({
     queryKey: ['alertHistory'],
     queryFn: async () => {
       const response = await fetchAlertHistory({ limit: 100 });
-      return response.data?.data || [];
+      return response.data || [];
     },
+    refetchInterval: ALERT_REFRESH_MS,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
   });
 
   const mutation = useMutation({

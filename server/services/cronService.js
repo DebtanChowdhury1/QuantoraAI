@@ -141,6 +141,7 @@ export const runNightlyMaintenance = async () => {
           periodDays: config.rollupIntervalHours / 24,
           sourceType: 'rollup',
           bucketStart: entry._id.bucketStart,
+          providerResponse: null,
           geminiResponse: null,
         },
         { upsert: true, setDefaultsOnInsert: true }
@@ -159,7 +160,10 @@ export const runNightlyMaintenance = async () => {
 };
 
 export const startBackgroundJobs = () => {
-  const predictionCron = schedulePredictionCron();
+  const predictionCron = config.enablePredictionCron ? schedulePredictionCron() : null;
+  if (!config.enablePredictionCron) {
+    logger.info('Prediction cron disabled');
+  }
   const maintenanceCron = scheduleNightlyMaintenance();
   return { predictionCron, maintenanceCron };
 };

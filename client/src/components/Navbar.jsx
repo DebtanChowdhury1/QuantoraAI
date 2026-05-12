@@ -1,20 +1,23 @@
 import { NavLink } from "react-router-dom";
-import { motion } from "framer-motion";
 import { SignedIn, SignedOut, SignInButton, UserButton } from "@/lib/authClient";
+import CurrencySelector from '@/components/CurrencySelector';
+import { useNotifications } from '@/context/NotificationContext';
 
 const navItems = [
   { to: '/', label: 'Dashboard' },
-  { to: '/alerts', label: 'Alerts' },
+  { to: '/expert', label: 'AI Expert' },
+  { to: '/portfolio', label: 'Portfolio' },
+  { to: '/alerts', label: 'Notifications' },
   { to: '/profile', label: 'Profile' },
 ];
 
-const Navbar = () => (
-  <motion.header
-    className="fixed inset-x-0 top-0 z-50 border-b border-neutral-600/30 bg-background/80 backdrop-blur"
-    initial={{ opacity: 0, y: -12 }}
-    animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.6 }}
-  >
+const Navbar = () => {
+  const { unreadCount } = useNotifications();
+
+  return (
+    <header
+      className="fixed inset-x-0 top-0 z-50 border-b border-neutral-600/30 bg-background/80 backdrop-blur"
+    >
     <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-4">
       <NavLink to="/" className="flex items-center gap-3 text-neutral-100">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/20 text-2xl font-bold text-accent">
@@ -22,8 +25,8 @@ const Navbar = () => (
         </span>
         <div>
           <p className="text-lg font-semibold">Quantora AI</p>
-          <p className="text-xs uppercase tracking-wide text-gold">
-            Predict Smarter. Spend Nothing.
+          <p className="hidden text-xs uppercase tracking-wide text-gold sm:block">
+            AI Crypto Intelligence
           </p>
         </div>
       </NavLink>
@@ -36,11 +39,19 @@ const Navbar = () => (
               `transition hover:text-accent ${isActive ? 'text-accent' : 'text-neutral-300'}`
             }
           >
-            {item.label}
+            <span className="relative">
+              {item.label}
+              {item.to === '/alerts' && unreadCount > 0 && (
+                <span className="absolute -right-5 -top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] leading-none text-white">
+                  {Math.min(unreadCount, 99)}
+                </span>
+              )}
+            </span>
           </NavLink>
         ))}
       </nav>
       <div className="flex items-center gap-3">
+        <CurrencySelector />
         <SignedOut>
           <SignInButton mode="modal">
             <button
@@ -56,7 +67,30 @@ const Navbar = () => (
         </SignedIn>
       </div>
     </div>
-  </motion.header>
-);
+    <nav className="mx-auto flex w-full max-w-7xl gap-2 overflow-x-auto px-4 pb-3 text-xs font-medium md:hidden">
+      {navItems.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          className={({ isActive }) =>
+            `rounded-full border px-3 py-1.5 transition ${
+              isActive
+                ? 'border-accent/50 bg-accent/15 text-accent'
+                : 'border-neutral-700 bg-neutral-900 text-neutral-300'
+            }`
+          }
+        >
+          {item.label}
+          {item.to === '/alerts' && unreadCount > 0 && (
+            <span className="ml-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] leading-none text-white">
+              {Math.min(unreadCount, 99)}
+            </span>
+          )}
+        </NavLink>
+      ))}
+    </nav>
+  </header>
+  );
+};
 
 export default Navbar;

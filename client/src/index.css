@@ -30,8 +30,51 @@
   }
 }
 
+@keyframes profileAurora {
+  0% {
+    transform: translate3d(-8%, -4%, 0) scale(1);
+    opacity: 0.58;
+  }
+  50% {
+    transform: translate3d(8%, 5%, 0) scale(1.08);
+    opacity: 0.82;
+  }
+  100% {
+    transform: translate3d(-8%, -4%, 0) scale(1);
+    opacity: 0.58;
+  }
+}
+
+@keyframes notificationLife {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
 @layer utilities {
   .fade-in {
     animation: fadeIn 0.45s ease-in-out;
+  }
+
+  .profile-aurora {
+    background:
+      radial-gradient(circle at 18% 20%, rgba(0, 255, 136, 0.22), transparent 30%),
+      radial-gradient(circle at 82% 18%, rgba(255, 184, 0, 0.16), transparent 28%),
+      radial-gradient(circle at 52% 95%, rgba(20, 184, 166, 0.16), transparent 34%);
+    animation: profileAurora 9s ease-in-out infinite;
+  }
+
+  .profile-card-grid {
+    background-image:
+      linear-gradient(rgba(0, 255, 136, 0.08) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 255, 136, 0.08) 1px, transparent 1px);
+    background-size: 34px 34px;
+  }
+
+  .notification-life {
+    animation: notificationLife 4s linear forwards;
   }
 }

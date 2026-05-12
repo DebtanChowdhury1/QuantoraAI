@@ -1,13 +1,16 @@
 import logger from '../utils/logger.js';
 import { config } from '../utils/limits.js';
-import { getCoinDetails, getMarketChart } from './coingeckoService.js';
+import { getCryptoData } from './cryptoDataService.js';
 import { generatePrediction } from './geminiService.js';
+import {
+  buildQuantoraFallbackSignal,
+  normalizeProviderSignal,
+} from './quantoraSignalEngine.js';
 import { sendAlertEmail } from './mailService.js';
 import Prediction from '../models/Prediction.js';
 import User from '../models/User.js';
 
-const hoursToMs = (hours) => hours * 60 * 60 * 1000;
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const secondsToMs = (seconds) => seconds * 1000;
 
 const computeStatsFromHistory = (prices) => {
   if (!Array.isArray(prices) || prices.length === 0) {
@@ -34,13 +37,24 @@ const notifyUsers = async ({ coinId, coinName, action, confidence, reason, price
     return;
   }
 
-  const emailMinGapMs = config.emailMinGapMin * 60 * 1000;
-
   const upsertOps = [];
   let notifications = 0;
 
   for (const user of users) {
-    if (!user.canNotifyForCoin(coinId, emailMinGapMs)) {
+    const settings = user.notificationSettings || {};
+    const selectedCoins = new Set(settings.selectedCoins || []);
+    if (settings.emailEnabled === false || settings.signalEmail === false) {
+      continue;
+    }
+    if (selectedCoins.size && !selectedCoins.has(coinId)) {
+      continue;
+    }
+    const pref = user.alertPreferences.find((item) => item.coinId === coinId);
+    const minConfidence = Number(pref?.minConfidence ?? 0.65);
+    const cooldownMinutes = Number(pref?.cooldownMinutes ?? config.emailMinGapMin);
+    const cooldownMs = Math.max(cooldownMinutes, 5) * 60 * 1000;
+
+    if (confidence < minConfidence || !user.canNotifyForCoin(coinId, cooldownMs)) {
       continue;
     }
     try {
@@ -78,72 +92,16 @@ const notifyUsers = async ({ coinId, coinName, action, confidence, reason, price
   logger.info({ coinId, notifications }, 'Completed user notifications for coin');
 };
 
-const buildFallbackPrediction = ({
-  change24h,
-  volatility,
-  avgPrice,
-  marketPrice,
-  coinName,
-}) => {
-  const magnitude = Math.abs(change24h);
-  let action = 'HOLD';
-  if (change24h >= 1.5) {
-    action = 'BUY';
-  } else if (change24h <= -1.5) {
-    action = 'SELL';
-  }
-
-  const confidenceBase = Math.min(magnitude / 10, 0.5);
-  const volatilityPenalty = Math.min(volatility / 100, 0.3);
-  const confidence = Math.max(0.2, confidenceBase + 0.2 - volatilityPenalty);
-
-  const reasonParts = [
-    'Gemini temporarily unavailable; heuristic fallback engaged.',
-    `24h change ${change24h.toFixed(2)}%.`,
-  ];
-  if (Number.isFinite(volatility)) {
-    reasonParts.push(`7d volatility ${volatility.toFixed(2)}%.`);
-  }
-  reasonParts.push(
-    action === 'HOLD'
-      ? 'Price movement within neutral band; maintaining position.'
-      : action === 'BUY'
-      ? 'Positive momentum suggests upside continuation.'
-      : 'Negative momentum suggests near-term downside risk.'
-  );
-
-  return {
-    action,
-    confidence: Number(confidence.toFixed(2)),
-    reason: reasonParts.join(' '),
-    raw: {
-      fallback: true,
-      source: 'heuristic',
-      change24h,
-      volatility,
-      avgPrice,
-      marketPrice,
-      coinName,
-    },
-  };
-};
-
-export const generateAndStorePrediction = async (coinId, { notify = true } = {}) => {
-  const snapshot = await getCoinDetails(coinId);
-  if (config.coingeckoRequestDelayMs > 0) {
-    await sleep(Math.floor(config.coingeckoRequestDelayMs / 2));
-  }
-  const history = await getMarketChart(coinId, 7);
-  const { avgPrice, volatility } = computeStatsFromHistory(history?.prices || []);
-  const change24h = Number(snapshot?.market_data?.price_change_percentage_24h) ??
-    Number(snapshot.price_change_percentage_24h) ??
-    0;
+export const generateAndStorePrediction = async (coinId, { notify = true, force = false } = {}) => {
+  const snapshot = await getCryptoData(coinId);
+  const { avgPrice, volatility } = computeStatsFromHistory(snapshot.history || []);
+  const change24h = Number(snapshot.change_24h) || 0;
   const periodDays = 7;
   const previous = await fetchPreviousPrediction(coinId);
 
   if (previous) {
     const ageMs = Date.now() - previous.createdAt.getTime();
-    if (ageMs < hoursToMs(config.predictRefreshMin / 60) && !notify) {
+    if (!force && ageMs < secondsToMs(config.aiSignalCacheSeconds) && !notify) {
       return {
         predictionDoc: previous,
         previous,
@@ -154,8 +112,14 @@ export const generateAndStorePrediction = async (coinId, { notify = true } = {})
     }
   }
 
-  const currentPrice =
-    snapshot?.market_data?.current_price?.usd ?? snapshot?.current_price ?? snapshot?.marketPrice;
+  const currentPrice = snapshot.price;
+  const marketContext = {
+    change24h,
+    volatility,
+    avgPrice,
+    marketPrice: currentPrice,
+    coinName: snapshot.name,
+  };
 
   let aiPrediction;
   let fallbackUsed = false;
@@ -171,16 +135,14 @@ export const generateAndStorePrediction = async (coinId, { notify = true } = {})
       change24h,
       marketPrice: currentPrice,
     });
+    aiPrediction = normalizeProviderSignal(aiPrediction, marketContext);
   } catch (error) {
     fallbackUsed = true;
     predictionError = error;
-    logger.warn({ err: error, coinId }, 'Gemini unavailable; using heuristic fallback prediction');
-    aiPrediction = buildFallbackPrediction({
-      change24h,
-      volatility,
-      avgPrice,
-      marketPrice: currentPrice,
-      coinName: snapshot.name,
+    logger.warn({ err: error, coinId }, 'Quantora AI provider unavailable; using deterministic fallback signal');
+    aiPrediction = buildQuantoraFallbackSignal({
+      ...marketContext,
+      providerFailure: true,
     });
   }
 
@@ -191,11 +153,20 @@ export const generateAndStorePrediction = async (coinId, { notify = true } = {})
     action: aiPrediction.action,
     confidence: aiPrediction.confidence,
     reason: aiPrediction.reason,
+    riskLevel: aiPrediction.riskLevel,
+    trendDirection: aiPrediction.trendDirection,
+    predictionHorizon: aiPrediction.predictionHorizon,
+    momentum: aiPrediction.momentum,
+    marketStrength: aiPrediction.marketStrength,
+    providerStatus: aiPrediction.providerStatus,
     change24h,
     averagePrice: avgPrice,
     volatility,
     periodDays,
     sourceType: 'raw',
+    providerResponse: fallbackUsed
+      ? { fallback: true, error: predictionError?.message, payload: aiPrediction.raw }
+      : aiPrediction.raw,
     geminiResponse: fallbackUsed
       ? { fallback: true, error: predictionError?.message, payload: aiPrediction.raw }
       : aiPrediction.raw,

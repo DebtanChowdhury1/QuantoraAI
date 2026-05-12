@@ -84,7 +84,7 @@ const formatConfidence = (value) => {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
     return '\u2014';
   }
-  return Number(value).toFixed(2);
+  return `${(Number(value) * 100).toFixed(3)}%`;
 };
 
 const formatTimeAgo = (input) => {

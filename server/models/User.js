@@ -5,6 +5,8 @@ const AlertPreferenceSchema = new mongoose.Schema(
   {
     coinId: { type: String, required: true },
     enabled: { type: Boolean, default: true },
+    minConfidence: { type: Number, default: 0.65 },
+    cooldownMinutes: { type: Number, default: () => config.emailMinGapMin },
   },
   { _id: false }
 );
@@ -20,6 +22,19 @@ const UserSchema = new mongoose.Schema(
       type: Map,
       of: Date,
       default: () => new Map(),
+    },
+    notificationSettings: {
+      emailEnabled: { type: Boolean, default: true },
+      signalEmail: { type: Boolean, default: true },
+      marketMoveEmail: { type: Boolean, default: true },
+      portfolioEmail: { type: Boolean, default: true },
+      portfolioValueEmail: { type: Boolean, default: true },
+      emailFrequencyMinutes: { type: Number, default: () => config.emailMinGapMin },
+      marketMoveThreshold: { type: Number, default: 5 },
+      selectedCoins: {
+        type: [String],
+        default: () => config.coins.slice(0, 10),
+      },
     },
   },
   {
@@ -42,7 +57,12 @@ UserSchema.methods.ensureDefaultPreferences = function ensureDefaultPreferences(
   let mutated = false;
   for (const coinId of coins) {
     if (!set.has(coinId)) {
-      this.alertPreferences.push({ coinId, enabled: true });
+      this.alertPreferences.push({
+        coinId,
+        enabled: true,
+        minConfidence: 0.65,
+        cooldownMinutes: config.emailMinGapMin,
+      });
       mutated = true;
     }
   }
@@ -56,6 +76,15 @@ UserSchema.methods.canNotifyForCoin = function canNotifyForCoin(coinId, cooldown
     return false;
   }
   const lastSent = this.notificationThrottle.get(coinId);
+  if (!lastSent) {
+    return true;
+  }
+  return Date.now() - lastSent.getTime() >= cooldownMs;
+};
+
+UserSchema.methods.canNotifyForKey = function canNotifyForKey(key, cooldownMs) {
+  ensureThrottleMap(this);
+  const lastSent = this.notificationThrottle.get(key);
   if (!lastSent) {
     return true;
   }
@@ -78,5 +107,13 @@ UserSchema.methods.getThrottleSnapshot = function getThrottleSnapshot() {
 };
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
+
+export const ensureUserIndexes = async () => {
+  const indexes = await User.collection.indexes();
+  const staleClerkIndex = indexes.find((index) => index.name === 'clerkId_1');
+  if (staleClerkIndex) {
+    await User.collection.dropIndex('clerkId_1');
+  }
+};
 
 export default User;
