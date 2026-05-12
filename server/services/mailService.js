@@ -9,6 +9,16 @@ import { HttpError } from '../utils/httpError.js';
 
 let transporter;
 
+const parseBoolean = (value, fallback = false) => {
+  if (value === undefined || value === null || value === '') return fallback;
+  return ['true', '1', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+};
+
+const parseNumber = (value, fallback) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
 const TYPE_LABELS = {
   SIGNAL: 'AI Signal',
   AI_SIGNAL: 'AI Signal',
@@ -178,11 +188,14 @@ const getTransporter = () => {
   }
 
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: process.env.SMTP_HOST || 'smtp.gmail.com',
+    port: parseNumber(process.env.SMTP_PORT, 587),
+    secure: parseBoolean(process.env.SMTP_SECURE, false),
+    requireTLS: !parseBoolean(process.env.SMTP_SECURE, false),
     auth: { user, pass },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 15000,
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 25000,
   });
 
   return transporter;
