@@ -124,36 +124,36 @@ router.get(
         `[Markets] primary market fetch failed: ${error?.message || 'Unknown error'}`
       );
 
-      const cachedRows = await buildCachedMarketRows();
-      if (cachedRows.length >= Math.min(config.coins.length, 5)) {
-        data = cachedRows;
-      } else {
-      const results = await Promise.allSettled(
-        config.coins.map(async (coinId) => {
-          const snapshot = await getCryptoData(coinId);
-          console.log(
-            `[Markets] fallback success via ${snapshot.source} for ${coinId} (cached=${snapshot.cached})`
-          );
-          return {
-            id: snapshot.coinId,
-            symbol: snapshot.symbol,
-            name: snapshot.name,
-            image: snapshot.image ?? null,
-            current_price: snapshot.price,
-            price_change_percentage_24h: snapshot.change_24h,
-            volatility_7d: snapshot.volatility_7d,
-            market_cap: snapshot.market_cap ?? null,
-            total_volume: snapshot.total_volume ?? null,
-            last_updated: snapshot.lastUpdated,
-            source: snapshot.source,
-            cached: snapshot.cached,
-          };
-        })
+      const results = await withTimeout(
+        Promise.allSettled(
+          config.coins.map(async (coinId) => {
+            const snapshot = await getCryptoData(coinId);
+            console.log(
+              `[Markets] fallback success via ${snapshot.source} for ${coinId} (cached=${snapshot.cached})`
+            );
+            return {
+              id: snapshot.coinId,
+              symbol: snapshot.symbol,
+              name: snapshot.name,
+              image: snapshot.image ?? null,
+              current_price: snapshot.price,
+              price_change_percentage_24h: snapshot.change_24h,
+              volatility_7d: snapshot.volatility_7d,
+              market_cap: snapshot.market_cap ?? null,
+              total_volume: snapshot.total_volume ?? null,
+              last_updated: snapshot.lastUpdated,
+              source: snapshot.source,
+              cached: snapshot.cached,
+            };
+          })
+        ),
+        14000,
+        []
       );
 
       const fallbackRows = [];
       const fallbackErrors = [];
-      results.forEach((result, index) => {
+      results.forEach?.((result, index) => {
         const coinId = config.coins[index];
         if (result.status === 'fulfilled') {
           fallbackRows.push(result.value);
@@ -164,6 +164,9 @@ router.get(
         fallbackErrors.push({ coinId, message });
       });
 
+      const liveIds = new Set(fallbackRows.map((item) => item.id));
+      const cachedRows = (await buildCachedMarketRows()).filter((item) => !liveIds.has(item.id));
+
       if (!fallbackRows.length && !cachedRows.length) {
         throw new HttpError(503, 'Unable to load market data', {
           cause: primaryError?.message || 'Unknown primary failure',
@@ -171,8 +174,7 @@ router.get(
         });
       }
 
-      data = fallbackRows.length ? fallbackRows : cachedRows;
-      }
+      data = fallbackRows.length ? [...fallbackRows, ...cachedRows] : cachedRows;
     }
 
     if (!global || !Number(global.totalMarketCap)) {
