@@ -19,6 +19,11 @@ const parseNumber = (value, fallback) => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+const isTimeoutError = (error) =>
+  /timeout|timed out|etimedout|connection closed/i.test(
+    `${error?.code || ''} ${error?.message || ''}`
+  );
+
 const TYPE_LABELS = {
   SIGNAL: 'AI Signal',
   AI_SIGNAL: 'AI Signal',
@@ -177,28 +182,52 @@ const renderNotificationHtml = ({
   };
 };
 
-const getTransporter = () => {
-  if (transporter) {
-    return transporter;
-  }
+const createSmtpTransporter = ({ fallback = false } = {}) => {
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
   if (!user || !pass) {
     throw new HttpError(500, 'SMTP credentials missing');
   }
+  const host = process.env.SMTP_HOST || 'smtp.gmail.com';
+  const primarySecure = parseBoolean(process.env.SMTP_SECURE, false);
+  const primaryPort = parseNumber(process.env.SMTP_PORT, 587);
+  const port = fallback ? parseNumber(process.env.SMTP_FALLBACK_PORT, 465) : primaryPort;
+  const secure = fallback ? true : primarySecure;
 
-  transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST || 'smtp.gmail.com',
-    port: parseNumber(process.env.SMTP_PORT, 587),
-    secure: parseBoolean(process.env.SMTP_SECURE, false),
-    requireTLS: !parseBoolean(process.env.SMTP_SECURE, false),
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    requireTLS: !secure,
     auth: { user, pass },
     connectionTimeout: 15000,
     greetingTimeout: 15000,
     socketTimeout: 25000,
+    tls: {
+      servername: host,
+    },
   });
+};
+
+const getTransporter = () => {
+  if (!transporter) {
+    transporter = createSmtpTransporter();
+  }
 
   return transporter;
+};
+
+const sendMailWithFallback = async (mail) => {
+  try {
+    return await getTransporter().sendMail(mail);
+  } catch (error) {
+    if (!isTimeoutError(error)) {
+      throw error;
+    }
+    logger.warn({ err: error }, 'Primary SMTP send timed out; retrying secure fallback port');
+    transporter = createSmtpTransporter({ fallback: true });
+    return transporter.sendMail(mail);
+  }
 };
 
 export const sendAlertEmail = async ({ to, coinId, coinName, action, confidence, price, reason }) => {
@@ -228,7 +257,7 @@ export const sendAlertEmail = async ({ to, coinId, coinName, action, confidence,
 
   try {
     console.log(`[Mail] Sending alert to ${to}`);
-    const result = await getTransporter().sendMail(mail);
+    const result = await sendMailWithFallback(mail);
     logger.info({ to, messageId: result.messageId }, 'Alert email dispatched');
     return result;
   } catch (error) {
@@ -278,7 +307,7 @@ export const sendCustomNotificationEmail = async ({
   };
 
   try {
-    const result = await getTransporter().sendMail(mail);
+    const result = await sendMailWithFallback(mail);
     logger.info({ to, messageId: result.messageId }, 'Custom notification email dispatched');
     return result;
   } catch (error) {

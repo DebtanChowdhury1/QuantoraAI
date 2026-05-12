@@ -37,6 +37,8 @@ services:
         value: 587
       - key: SMTP_SECURE
         value: false
+      - key: SMTP_FALLBACK_PORT
+        value: 465
       - key: CLERK_FRONTEND_API
         sync: false
       - key: CLERK_API_KEY

@@ -108,20 +108,14 @@ router.get(
         const cachedRows = (await buildCachedMarketRows()).filter((item) => !liveIds.has(item.id));
         data = [...liveRows, ...cachedRows];
       } else {
-        const cachedRows = await buildCachedMarketRows();
-        if (cachedRows.length >= Math.min(config.coins.length, 5)) {
-          data = cachedRows;
-          fallbackUsed = true;
-        } else {
-          if (!config.useCoinGeckoPrimary) {
-            throw new Error('CoinGecko primary disabled');
-          }
-          const primary = await withTimeout(getMarketData(), 8000, null);
-          if (!Array.isArray(primary) || primary.length === 0) {
-            throw new Error('Primary market feed timed out or returned no market entries');
-          }
-          data = primary;
+        if (!config.useCoinGeckoPrimary) {
+          throw new Error('CoinGecko primary disabled');
         }
+        const primary = await withTimeout(getMarketData(), 8000, null);
+        if (!Array.isArray(primary) || primary.length === 0) {
+          throw new Error('Primary market feed timed out or returned no market entries');
+        }
+        data = primary;
       }
     } catch (error) {
       primaryError = error;

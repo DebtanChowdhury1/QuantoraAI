@@ -14,6 +14,7 @@ const NotificationContext = createContext(null);
 const READ_KEY = 'quantora-read-notifications';
 const SEEN_KEY = 'quantora-seen-notifications';
 const SETTINGS_KEY = 'quantora-notification-settings';
+const LOCAL_EVENTS_KEY = 'quantora-local-notification-events';
 
 const readSettings = () => {
   try {
@@ -52,6 +53,23 @@ const readStorageSet = (key) => {
 
 const writeStorageSet = (key, set) => {
   window.localStorage.setItem(key, JSON.stringify(Array.from(set).slice(0, 200)));
+};
+
+const localEventsKey = (email = '') =>
+  `${LOCAL_EVENTS_KEY}:${String(email || 'guest').trim().toLowerCase()}`;
+
+const readLocalEvents = (email) => {
+  try {
+    const events = JSON.parse(window.localStorage.getItem(localEventsKey(email)) || '[]');
+    return Array.isArray(events) ? events.slice(0, 50) : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeLocalEvents = (email, events = []) => {
+  if (!email) return;
+  window.localStorage.setItem(localEventsKey(email), JSON.stringify(events.slice(0, 50)));
 };
 
 const alertId = (alert) => alert?._id || `${alert?.coinId}-${alert?.action}-${alert?.createdAt}`;
@@ -185,6 +203,19 @@ export const NotificationProvider = ({ children }) => {
   const eventThrottleRef = useRef(new Map());
   const portfolioSnapshotRef = useRef(new Map());
 
+  useEffect(() => {
+    if (!identity?.email) {
+      setLocalEvents([]);
+      return;
+    }
+    setLocalEvents(readLocalEvents(identity.email));
+  }, [identity?.email]);
+
+  useEffect(() => {
+    if (!identity?.email) return;
+    writeLocalEvents(identity.email, localEvents);
+  }, [identity?.email, localEvents]);
+
   const historyQuery = useQuery({
     queryKey: ['global-notifications', identity?.clerkId],
     queryFn: async () => {
@@ -263,7 +294,11 @@ export const NotificationProvider = ({ children }) => {
         ...alert,
         recipientName,
       }));
-      setLocalEvents((current) => [...personalizedEvents, ...current].slice(0, 50));
+      setLocalEvents((current) =>
+        [...personalizedEvents, ...current]
+          .filter((alert, index, list) => list.findIndex((item) => alertId(item) === alertId(alert)) === index)
+          .slice(0, 50)
+      );
       if (settings.pagePopups && !settings.doNotDisturb) {
         setToasts((current) => [...personalizedEvents.slice(0, 6), ...current].slice(0, 6));
       }
@@ -380,7 +415,7 @@ export const NotificationProvider = ({ children }) => {
       const price = Number(coin.current_price);
       if (!Number.isFinite(change) || !Number.isFinite(price) || Math.abs(change) < threshold) return;
       const direction = change >= 0 ? 'UP' : 'DOWN';
-      const key = `market:${coin.id}:${direction}:${Math.floor(Math.abs(change))}`;
+      const key = `market:${coin.id}:${direction}:${Math.floor(Math.abs(change) * 10) / 10}`;
       const last = eventThrottleRef.current.get(key) || 0;
       if (now - last < 15 * 60 * 1000) return;
       eventThrottleRef.current.set(key, now);
