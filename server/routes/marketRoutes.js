@@ -111,7 +111,7 @@ router.get(
         if (!config.useCoinGeckoPrimary) {
           throw new Error('CoinGecko primary disabled');
         }
-        const primary = await withTimeout(getMarketData(), 8000, null);
+        const primary = await withTimeout(getMarketData(config.coins), 8000, null);
         if (!Array.isArray(primary) || primary.length === 0) {
           throw new Error('Primary market feed timed out or returned no market entries');
         }

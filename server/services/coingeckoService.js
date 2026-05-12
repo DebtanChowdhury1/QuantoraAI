@@ -102,17 +102,20 @@ export const getSupportedCurrencies = async () =>
     errorMessage: 'Failed to fetch supported currencies',
   });
 
-export const getMarketData = async () =>
+export const getMarketData = async (ids = []) =>
   fetchFromCoinGecko('coins/markets', {
     params: {
       vs_currency: 'usd',
+      ids: Array.isArray(ids) && ids.length ? ids.join(',') : undefined,
       order: 'market_cap_desc',
       per_page: 250,
       page: 1,
       sparkline: false,
     },
     errorMessage: 'Failed to fetch market data',
-    cacheKey: 'coins/markets:usd:250',
+    cacheKey: Array.isArray(ids) && ids.length
+      ? `coins/markets:usd:${ids.join(',')}`
+      : 'coins/markets:usd:250',
     ttlMs: config.marketDataCacheSeconds * 1000,
   });
 
