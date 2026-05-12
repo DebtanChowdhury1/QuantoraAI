@@ -25,6 +25,9 @@ const corsOptions = allowedOrigins.includes('*')
 app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
+app.options(/^\/api\/.*$/, cors(corsOptions), (_req, res) => {
+  res.sendStatus(204);
+});
 app.use(
   rateLimit({
     windowMs: 60 * 1000,
